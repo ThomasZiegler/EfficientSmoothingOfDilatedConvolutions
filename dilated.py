@@ -53,10 +53,12 @@ def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filte
 
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
-    w_avg = tf.Variable(tf.constant(w_avg_value, shape=[filter_size,filter_size,1,1,1]), name='w_avg')
-    o = tf.expand_dims(x, -1)
-    o = tf.nn.conv3d(o, w_avg, strides=[1,1,1,1,1], padding='SAME')
-    o = tf.squeeze(o, -1)
+    w_avg = tf.Variable(tf.constant(w_avg_value,
+                                    shape=[filter_size,filter_size,num_x,1]), name='w_avg')
+    o = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
+#    o = tf.expand_dims(x, -1)
+#    o = tf.nn.conv3d(o, w_avg, strides=[1,1,1,1,1], padding='SAME')
+#    o = tf.squeeze(o, -1)
 
     with tf.variable_scope(name) as scope:
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
