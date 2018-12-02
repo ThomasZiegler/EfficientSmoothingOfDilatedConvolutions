@@ -1,9 +1,31 @@
-# Deeplab v2 ResNet for Semantic Image Segmentation
+# Smoothed Dilated Convolutions for Improved Dense Prediction
 
-This is an (re-)implementation of [DeepLab v2 (ResNet-101)](http://liangchiehchen.com/projects/DeepLabv2_resnet.html) in TensorFlow for semantic image segmentation on the [PASCAL VOC 2012 dataset](http://host.robots.ox.ac.uk/pascal/VOC/). We refer to [DrSleep's implementation](https://github.com/DrSleep/tensorflow-deeplab-resnet) (Many thanks!). We do not use tf-to-caffe packages like kaffe so you only need TensorFlow 1.3.0+ to run this code.
+This is the code for reproducing experimental results in our paper [Smoothed Dilated Convolutions for Improved Dense Prediction](http://www.kdd.org/kdd2018/accepted-papers/view/smoothed-dilated-convolutions-for-improved-dense-prediction) accepted for long presentation in KDD2018. 
 
-The deeplab pre-trained ResNet-101 ckpt files (pre-trained on MSCOCO) are provided by DrSleep -- [here](https://drive.google.com/drive/folders/0B_rootXHuswsZ0E4Mjh1ZU5xZVU). Thanks again!
+Created by [Zhengyang Wang](http://www.linkedin.com/in/zhengyangwang1991) and [Shuiwang Ji](http://https://www.linkedin.com/in/shuiwang-ji-9a040715/) at Texas A&M University.
 
+In this work, we propose smoothed dilated convolutions to address the gridding artifacts caused by dilated convolutions. Some results are shown below. Our methods improve the image semantic segmentation models, with only hundreds of extra training parameters. More details and experimental results will be added once the paper is published.
+
+## Citation
+If using this code , please cite our paper.
+```
+@inproceedings{wang2018smoothed,
+  title={Smoothed Dilated Convolutions for Improved Dense Prediction},
+  author={Wang, Zhengyang and Ji, Shuiwang},
+  booktitle={Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining},
+  pages={2486--2495},
+  year={2018},
+  organization={ACM}
+}
+```
+
+## Results
+**PASCAL mIoU**:
+![model](./results/Results_PASCAL.png)
+
+We perform the effective receptive field analysis to visualize the smoothing effect.
+
+<<<<<<< HEAD
 Created by [Zhengyang Wang](http://people.tamu.edu/~zhengyang.wang/) and [Shuiwang Ji](http://people.tamu.edu/~sji/index.html) at Texas A&M University.
 
 ## Update
@@ -22,6 +44,20 @@ If using this code , please cite our paper.
   organization={ACM}
 }
 ```
+=======
+**Effective Receptive Field Analysis**:
+
+![model](./results/Results_ERF.png)
+
+## Introduction
+The baseline is an (re-)implementation of [DeepLab v2 (ResNet-101)](http://liangchiehchen.com/projects/DeepLabv2_resnet.html) in TensorFlow for semantic image segmentation on the [PASCAL VOC 2012 dataset](http://host.robots.ox.ac.uk/pascal/VOC/). We refer to [DrSleep's implementation](https://github.com/DrSleep/tensorflow-deeplab-resnet) (Many thanks!). We do not use tf-to-caffe packages like kaffe so you only need TensorFlow 1.3.0+ to run this code.
+
+The deeplab pre-trained ResNet-101 ckpt files (pre-trained on MSCOCO) are provided by DrSleep -- [here](https://drive.google.com/drive/folders/0B_rootXHuswsZ0E4Mjh1ZU5xZVU). Thanks again!
+
+## Update
+**02/09/2018**:
+* We implement our proposed smoothed dilated convolutions and insert them in the baseline. To use them, simply change 'dilated_type' in main.py.
+>>>>>>> f690c3a208f56c0f05c1b7d3cfc5d59ebafe5f4d
 
 **02/02/2018**:
 
@@ -95,13 +131,13 @@ power: parameter for poly learning rate
 
 momentum: momentum
 
-encoder_name: name of pre-trained model, res101, res50 or deeplab
+encoder_name: name of pre-trained model: res101, res50 or deeplab
 
 pretrain_file: the initial pre-trained model file for transfer learning
 
-data_list: training data list file
+dilated_type: type of dilated conv: regular, decompose, smooth_GI or smooth_SSC
 
-grad_update_every (msc only): accumulate the gradients for how many steps before updating weights. Note that in the msc case, this is actually the true training batch size.
+data_list: training data list file
 ```
 #### Testing/Validation
 ```
