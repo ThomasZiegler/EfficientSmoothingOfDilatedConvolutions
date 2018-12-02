@@ -129,7 +129,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     o4 = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
     
     c_ = tf.nn.softmax(c_)
-    o = c[0]*o1+c[1]*o2+c[2]*o3+c[3]*o4
+    o = c_[0]*o1+c_[1]*o2+c_[2]*o3+c_[3]*o4
        
     with tf.variable_scope(name) as scope:
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
