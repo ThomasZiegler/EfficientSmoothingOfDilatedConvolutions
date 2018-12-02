@@ -119,7 +119,7 @@ class Model(object):
 #        write_log('Mean IoU: {:.3f}'.format(self.mIoU.eval(session=self.sess)), self.conf.logfile)
         summary = self.compute_IoU_per_class(confusion_matrix)
         summary.value.add(tag='pixel accuracy', simple_value=accuracy)
-        self.summary_writer_test.add_summary(summary, (self.start_step+self.num_steps))
+        self.summary_writer_test.add_summary(summary, (self.conf.start_step+self.conf.num_steps))
 
         # finish
         self.coord.request_stop()
