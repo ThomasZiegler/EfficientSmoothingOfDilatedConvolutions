@@ -27,6 +27,9 @@ def _dilated_conv2d(dilated_type, x, kernel_size, num_o, dilation_factor, name,
         return _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
     elif dilated_type == 'gaussian_filter':
         return _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+    elif dilated_type == '_combinational_layer':
+        return _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+
 
 
     else:
