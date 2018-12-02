@@ -93,7 +93,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     #3th to averaging filter
     #4th to gaussian filter
     
-    c_ = tf.Variable([0,0,0,0],name="c_vector")
+    c_ = tf.Variable([0.0,0.0,0.0,0.0],name="c_vector")
     #this needs to be trainable...
     o1 = x
     filter = tf.Variable(tf.random_normal([filter_size,filter_size,num_x,num_x]),name="w_conv_c_vars")
