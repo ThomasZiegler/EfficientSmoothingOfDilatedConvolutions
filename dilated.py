@@ -57,6 +57,8 @@ def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filte
     """
     num_x = x.shape[3].value
 
+    filter_size = dilation_factor - 1
+
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
     w_avg = tf.Variable(tf.constant(w_avg_value,
@@ -83,6 +85,8 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     num_x = x.shape[3].value
     
     
+    filter_size = dilation_factor - 1
+
     #Vector with 4 elements
     #1st corresponding to identity
     #2nd to regular convolution
@@ -140,6 +144,8 @@ def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filte
     Dilated conv2d with antecedent gaussian filter and without BN or relu.
     """
     num_x = x.shape[3].value
+
+    filter_size = dilation_factor - 1
 
     # perform gaussian filtering (as seprable convolution)
     sigma = tf.constant(1.0, shape=[1])
