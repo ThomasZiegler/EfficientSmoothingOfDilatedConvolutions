@@ -97,7 +97,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     #this needs to be trainable...
     o1 = x
     filter = tf.Variable(tf.random_normal([filter_size,filter_size,num_x,num_x]),name="w_conv_c_vars")
-    o2 = tf.nn.conv2d(x,filter,padding="SAME",name="w_conv_c")
+    o2 = tf.nn.conv2d(x,filter,[1,1,1,1],padding="SAME",name="w_conv_c")
 
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
