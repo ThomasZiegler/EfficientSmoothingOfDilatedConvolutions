@@ -96,16 +96,17 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     c_ = tf.Variable([0,0,0,0],name="c_vector")
     #this needs to be trainable...
     o1 = x
-    o2 = tf.nn.conv2d(x,[filter_size,filter_size,num_x,num_x],[1,1,1,1],padding="SAME",name="w_conv")
+    filter = tf.Variable(tf.random_normal([filter_size,filter_size,num_x,num_x]),name="w_conv_c_vars)
+    o2 = tf.nn.conv2d(x,filter,padding="SAME",name="w_conv_c")
 
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
     w_avg = tf.Variable(tf.constant(w_avg_value,
                                     shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
     o3 = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
-#    o = tf.expand_dims(x, -1)
-#    o = tf.nn.conv3d(o, w_avg, strides=[1,1,1,1,1], padding='SAME')
-#    o = tf.squeeze(o, -1)
+
+
+
 
 
 
