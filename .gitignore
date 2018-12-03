@@ -1,0 +1,16 @@
+# log files
+log/
+log.txt
+parameters.json
+
+# leonhard cluster job log
+lsf.*
+
+# 
+__pycache__/
+
+# model checkpoints
+model/
+
+# pycharm project files
+.idea/

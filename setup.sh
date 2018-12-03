@@ -9,9 +9,10 @@ if [[ $1 == cityscapes ]]; then
 	export DATALIST="$PROJECT_DIR/dataset_cityscapes/train_fine.txt"
 	export VALDATALIST="$PROJECT_DIR/dataset_cityscapes/val_fine.txt"
 	export NR_VAL=500
-	export BATCH_SIZE=3								
+	export BATCH_SIZE=3
 	export IMG_SIZE=719
 	export NUM_CLASSES=19
+
 else
 	echo "Use VOC2012 dataset"
 	export DATASET="$PROJECT_DIR/../VOC2012"
@@ -22,9 +23,5 @@ else
 	export IMG_SIZE=321												
 	export NUM_CLASSES=21
 fi
-
-
-
-
 
 
