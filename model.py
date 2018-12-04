@@ -220,7 +220,7 @@ class Model(object):
             # Variables that load from pre-trained model.
             restore_var = [v for v in tf.global_variables() if 'fc' not in
                            v.name and 'fix_w' not in v.name and 'w_avg' not in
-                           v.name and 'w_gauss' not in v.name]
+                           v.name and 'w_gauss' not in v.name and 'c_vector' not in v.name and 'w_conv_c_vars' not in v.name and 'w_conv_c' not in v.name]
             # Trainable Variables
             all_trainable = tf.trainable_variables()
             # Fine-tune part
