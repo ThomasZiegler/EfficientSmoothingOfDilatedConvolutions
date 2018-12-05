@@ -24,7 +24,7 @@ def configure():
     flags.DEFINE_integer('save_interval', 10, 'number of iterations for saving log to tensorboard')
     flags.DEFINE_integer('random_seed', 1234, 'random seed')
     flags.DEFINE_float('weight_decay', 0.0001, 'weight decay rate')
-    flags.DEFINE_float('learning_rate', 0.00001, 'learning rate')
+    flags.DEFINE_float('learning_rate', 0.0001, 'learning rate')
     flags.DEFINE_float('power', 0.9, 'hyperparameter for poly learning rate')
     flags.DEFINE_float('momentum', 0.9, 'momentum')
     flags.DEFINE_string('encoder_name', 'deeplab', 'name of pre-trained model: res101, res50 or deeplab')
