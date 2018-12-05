@@ -96,8 +96,10 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     c_ = tf.Variable([0.0,0.0,0.0,0.0],name="c_vector")
     #this needs to be trainable...
     o1 = x
+    o_t = c[0]*o1
     filter = tf.Variable(tf.random_normal([filter_size,filter_size,num_x,num_x]),name="w_conv_c_vars")
     o2 = tf.nn.conv2d(x,filter,[1,1,1,1],padding="SAME",name="w_conv_c")
+    o_t += c[1]*o2
 
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
@@ -105,7 +107,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
                                     shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
     o3 = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
 
-
+    o_t += c[2]*o3
 
 
 
@@ -129,11 +131,11 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     o4 = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
     
     c_ = tf.nn.softmax(c_)
-    o = c_[0]*o1+c_[1]*o2+c_[2]*o3+c_[3]*o4
+    o_t += c_[3]*o4
        
     with tf.variable_scope(name) as scope:
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
-        o = tf.nn.atrous_conv2d(o, w, dilation_factor, padding='SAME')
+        o = tf.nn.atrous_conv2d(o_t, w, dilation_factor, padding='SAME')
         if biased:
             b = tf.get_variable('biases', shape=[num_o])
             o = tf.nn.bias_add(o, b)
