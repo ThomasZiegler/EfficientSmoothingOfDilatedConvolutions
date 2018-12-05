@@ -94,6 +94,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     #4th to gaussian filter
     
     c_ = tf.Variable([0.0,0.0,0.0,0.0],name="c_vector")
+    c_ = tf.nn.softmax(c_)
     #this needs to be trainable...
     o1 = x
     o_t = c_[0]*o1
@@ -130,7 +131,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     
     o4 = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
     
-    c_ = tf.nn.softmax(c_)
+
     o_t += c_[3]*o4
        
     with tf.variable_scope(name) as scope:
