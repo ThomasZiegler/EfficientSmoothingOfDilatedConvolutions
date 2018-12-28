@@ -53,6 +53,7 @@ class Model(object):
         threads = tf.train.start_queue_runners(coord=self.coord, sess=self.sess)
 
         # Train!
+        c_vector = [0, 0, 0]
         for step in range(self.conf.start_step, self.conf.start_step+self.conf.num_steps+1):
             start_time = time.time()
             feed_dict = { self.curr_step : step }
@@ -78,6 +79,18 @@ class Model(object):
                 summary.value.add(tag='mIoU', simple_value=mIoU)
                 summary.value.add(tag='loss', simple_value=loss_value)
 
+                try:
+                    var_c = [v for v in tf.global_variables() if "c_vector" in v.name][0]
+                    c_vector = var_c.eval(session=self.sess)
+                    summary = tf.Summary()
+                    summary.value.add(tag='C_1', simple_value=var_c[0])
+                    summary.value.add(tag='C_2', simple_value=var_c[1])
+                    summary.value.add(tag='C_3', simple_value=var_c[2])
+                    self.summary_writer_train.add_summary(summary,
+                                                         (self.conf.start_step+self.conf.num_steps))
+                except:
+                    pass
+
                 self.summary_writer_train.add_summary(summary, step)
 #                self.save(self.saver, step)
             else:
@@ -86,7 +99,7 @@ class Model(object):
                 mIoU = self.mIoU.eval(session=self.sess)
             duration = time.time() - start_time
 #           print('step {:d} \t loss = {:.3f}, ({:.3f} sec/step)'.format(step, loss_value, duration))
-            write_log('{:d}, {:.3f}, {:.3f}'.format(step, loss_value, mIoU), self.conf.logfile)
+            write_log('{:d}, {:.3f}, {:.3f}, [{:.3f}, {:.3f}, {:.3f}]'.format(step, loss_value, mIoU, c_vector[0], c_vector[1], c_vector[2]), self.conf.logfile)
 
         # finish
         self.save(self.saver, step)
@@ -107,12 +120,10 @@ class Model(object):
         
         try:
             var_c = [v for v in tf.global_variables() if "c_vector" in v.name][0]
-            value_c = sess.run(tf.nn.softmax(var_c))
             summary = tf.Summary()
-            summary.value.add(tag='C_1', simple_value=value_c[0])
-            summary.value.add(tag='C_2', simple_value=value_c[1])
-            summary.value.add(tag='C_3', simple_value=value_c[2])
-            summary.value.add(tag='C_4', simple_value=value_c[3])
+            summary.value.add(tag='C_1', simple_value=var_c[0])
+            summary.value.add(tag='C_2', simple_value=var_c[1])
+            summary.value.add(tag='C_3', simple_value=var_c[2])
             self.summary_writer_test.add_summary(summary,
                                                  (self.conf.start_step+self.conf.num_steps))
         except:
@@ -218,9 +229,10 @@ class Model(object):
             net = Deeplab_v2(self.image_batch, self.conf.num_classes, True,
                              self.conf.dilated_type, self.conf.filter_size)
             # Variables that load from pre-trained model.
-            restore_var = [v for v in tf.global_variables() if 'fc' not in
-                           v.name and 'fix_w' not in v.name and 'w_avg' not in
-                           v.name and 'w_gauss' not in v.name and 'c_vector' not in v.name and 'w_conv_c_vars' not in v.name and 'w_conv_c' not in v.name]
+            restore_var = [v for v in tf.global_variables() if 'fc' not in v.name
+                           and 'fix_w' not in v.name and 'w_avg' not in v.name
+                           and 'w_gauss' not in v.name and 'c_vector' not in v.name
+                           and 'gauss_sigma' not in v.name]
             # Trainable Variables
             all_trainable = tf.trainable_variables()
             # Fine-tune part
@@ -239,8 +251,10 @@ class Model(object):
             # Decoder part
             decoder_trainable = [v for v in all_trainable if 'decoder' in v.name]
         
-        decoder_w_trainable = [v for v in decoder_trainable if 'weights' in v.name or 'gamma' in v.name] # lr * 10.0
+        decoder_w_trainable = [v for v in decoder_trainable if 'weights' in v.name or 'gamma' in v.name or 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
         decoder_b_trainable = [v for v in decoder_trainable if 'biases' in v.name or 'beta' in v.name] # lr * 20.0
+
+        decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
         # Check
         assert(len(all_trainable) == len(decoder_trainable) + len(encoder_trainable))
         assert(len(decoder_trainable) == len(decoder_w_trainable) + len(decoder_b_trainable))
@@ -278,21 +292,27 @@ class Model(object):
         opt_encoder = tf.train.MomentumOptimizer(learning_rate, self.conf.momentum)
         opt_decoder_w = tf.train.MomentumOptimizer(learning_rate * 10.0, self.conf.momentum)
         opt_decoder_b = tf.train.MomentumOptimizer(learning_rate * 20.0, self.conf.momentum)
+        opt_decoder_pre = tf.train.MomentumOptimizer(learning_rate * 15.0, self.conf.momentum)
+
         # To make sure each layer gets updated by different lr's, we do not use 'minimize' here.
         # Instead, we separate the steps compute_grads+update_params.
         # Compute grads
-        grads = tf.gradients(self.reduced_loss, encoder_trainable + decoder_w_trainable + decoder_b_trainable)
+        grads = tf.gradients(self.reduced_loss, encoder_trainable + decoder_w_trainable + decoder_b_trainable + decoder_pre_trainable )
         grads_encoder = grads[:len(encoder_trainable)]
         grads_decoder_w = grads[len(encoder_trainable) : (len(encoder_trainable) + len(decoder_w_trainable))]
-        grads_decoder_b = grads[(len(encoder_trainable) + len(decoder_w_trainable)):]
+        grads_decoder_b = grads[(len(encoder_trainable) + len(decoder_w_trainable)) : (len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable))]
+        grads_decoder_pre = grads[(len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable)):]
+
         # Update params
         train_op_conv = opt_encoder.apply_gradients(zip(grads_encoder, encoder_trainable))
         train_op_fc_w = opt_decoder_w.apply_gradients(zip(grads_decoder_w, decoder_w_trainable))
         train_op_fc_b = opt_decoder_b.apply_gradients(zip(grads_decoder_b, decoder_b_trainable))
+        train_op_fc_pre = opt_decoder_pre.apply_gradients(zip(grads_decoder_pre, decoder_pre_trainable))
+        
         # Finally, get the train_op!
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # for collecting moving_mean and moving_variance
         with tf.control_dependencies(update_ops):
-            self.train_op = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b)
+            self.train_op = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b, train_op_fc_pre)
 
         # Saver for storing checkpoints of the model
         self.saver = tf.train.Saver(var_list=tf.global_variables(), max_to_keep=0)

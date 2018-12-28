@@ -27,10 +27,8 @@ def _dilated_conv2d(dilated_type, x, kernel_size, num_o, dilation_factor, name,
         return _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
     elif dilated_type == 'gaussian_filter':
         return _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
-    elif dilated_type == '_combinational_layer':
+    elif dilated_type == 'combinational_layer':
         return _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
-
-
 
     else:
         print('dilated_type ERROR!')
@@ -64,9 +62,6 @@ def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filte
     w_avg = tf.Variable(tf.constant(w_avg_value,
                                     shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
     o = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
-#    o = tf.expand_dims(x, -1)
-#    o = tf.nn.conv3d(o, w_avg, strides=[1,1,1,1,1], padding='SAME')
-#    o = tf.squeeze(o, -1)
 
     with tf.variable_scope(name) as scope:
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
@@ -77,109 +72,218 @@ def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filte
         return o
 
 
+def _c_vector(o_avg, o_gauss, o_ssc):
+    c_values = [0.33, 0.33, 0.33]
+    c_init = tf.constant_initializer(c_values)
+    c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init)
+    c_sum = tf.reduce_sum(c_)
+    c_ = c_ / c_sum
+    o = c_[0]*o_avg + c_[1]*o_gauss + c_[2]*o_ssc
 
+    return o 
+
+
+def _gauss_sigma():
+    sigma_init = 1.0
+    init = tf.constant_initializer(sigma_init)
+    sigma = tf.get_variable('gauss_sigma', shape=[1], initializer=init)
+
+    return sigma
+
+
+# use only one sigma for all dilated convolutions
+#def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+#    """
+#    Dilated conv2d with antecedent average filter and without BN or relu.
+#    """
+#    num_x = x.shape[3].value
+#    filter_size = dilation_factor - 1
+#    fix_w_size = dilation_factor * 2 - 1
+#
+#    c_vector = tf.make_template('const_vector', _c_vector)
+#    gauss_sigma = tf.make_template('sigma', _gauss_sigma)
+#
+#    # perform averaging (as seprable convolution)
+#    w_avg_value = 1.0/(filter_size*filter_size)
+#    w_avg = tf.Variable(tf.constant(w_avg_value,
+#                                    shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
+#    o_avg = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
+#
+#    # perform gaussian filtering
+#    sigma = gauss_sigma()
+#
+#    ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
+#    xx, yy = tf.meshgrid(ax, ax)
+#
+#    w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+#    w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
+#
+#    w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
+#    w_gauss_value = tf.expand_dims(w_gauss_value,-1)
+#    w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
+#    o_gauss = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+#  
+#
+#    with tf.variable_scope(name) as scope:
+#        # perform SSC filtering
+#        fix_w = tf.get_variable('fix_w', shape=[fix_w_size, fix_w_size, 1, 1, 1], initializer=tf.zeros_initializer)
+#        mask = np.zeros([fix_w_size, fix_w_size, 1, 1, 1], dtype=np.float32)
+#        mask[dilation_factor - 1, dilation_factor - 1, 0, 0, 0] = 1
+#        fix_w = tf.add(fix_w, tf.constant(mask, dtype=tf.float32))
+#        o_ssc = tf.expand_dims(x, -1)
+#        o_ssc = tf.nn.conv3d(o_ssc, fix_w, strides=[1,1,1,1,1], padding='SAME')
+#        o_ssc = tf.squeeze(o_ssc, -1)
+#
+#        o = c_vector(o_avg, o_gauss, o_ssc)
+#        w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
+#        o = tf.nn.atrous_conv2d(o, w, dilation_factor, padding='SAME')
+#        if biased:
+#            b = tf.get_variable('biases', shape=[num_o])
+#            o = tf.nn.bias_add(o, b)
+#    return o
+
+def _get_c_vector(name):
+    with tf.variable_scope(name) as scope:
+        try:
+#            c_ = tf.get_variable('c_vector', shape=[], initializer=tf.constant_initializer([0.33, 0.33, 0.33]))
+            c_values = [0.33, 0.33, 0.33]
+            c_init = tf.constant_initializer(c_values)
+            c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init)
+
+        except ValueError:
+            scope.reuse_variables()
+            c_ = tf.get_variable('c_vector')
+
+        return c_
+
+
+# Use a separate sigma value for each dilated convolution
 def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
     """
     Dilated conv2d with antecedent average filter and without BN or relu.
     """
     num_x = x.shape[3].value
-    
-    
     filter_size = dilation_factor - 1
+    fix_w_size = dilation_factor * 2 - 1
 
-    #Vector with 4 elements
-    #1st corresponding to identity
-    #2nd to regular convolution
-    #3th to averaging filter
-    #4th to gaussian filter
-    
-    c_ = tf.Variable([0.0,0.0,0.0,0.0],name="c_vector")
-    c_ = tf.nn.softmax(c_)
-    #this needs to be trainable...
-    o1 = x
-    o_t = c_[0]*o1
-    filter = tf.Variable(tf.random_normal([filter_size,filter_size,num_x,num_x]),name="w_conv_c_vars")
-    o2 = tf.nn.conv2d(x,filter,[1,1,1,1],padding="SAME",name="w_conv_c")
-    o_t += c_[1]*o2
+    c_vector = tf.make_template('const_vector', _c_vector)
+    c_ = _get_c_vector(name)
+#    c_sum = tf.reduce_sum(c_)
+#    c_.assign(c_ / c_sum)
+    c_div = tf.div(c_, (c_[0]+c_[1]+c_[2]))
+    c_.assign(c_div) 
+
+
 
     # perform averaging (as seprable convolution)
     w_avg_value = 1.0/(filter_size*filter_size)
     w_avg = tf.Variable(tf.constant(w_avg_value,
                                     shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
-    o3 = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
-
-    o_t += c_[2]*o3
-
-
-
-
-    # perform gaussian filtering (as seprable convolution)
-    sigma = tf.constant(1.0, shape=[1])
-    # create kernel grid
-    ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
-    xx, yy = tf.meshgrid(ax, ax)
-    # calculate weight and reshape to correct shape
-    w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.*sigma**2))
-    w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
-
-    # dublicate kernel num_x times
-    w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value,-1), [1,1,num_x])
-    # add expand one dimension to match depthwise_conv2d_native filter requirement
-    w_gauss_value = tf.expand_dims(w_gauss_value,-1)
-    w_gauss = tf.Variable(w_gauss_value, name='w_gauss',trainable=False)
-
-    
-    o4 = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
-    
-
-    o_t += c_[3]*o4
-       
-    with tf.variable_scope(name) as scope:
-        w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
-        o = tf.nn.atrous_conv2d(o_t, w, dilation_factor, padding='SAME')
-        if biased:
-            b = tf.get_variable('biases', shape=[num_o])
-            o = tf.nn.bias_add(o, b)
-        return o
-
-
-def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
-    """
-    Dilated conv2d with antecedent gaussian filter and without BN or relu.
-    """
-    num_x = x.shape[3].value
-
-    filter_size = dilation_factor - 1
-
-    # perform gaussian filtering (as seprable convolution)
-    sigma = tf.constant(1.0, shape=[1])
-    # create kernel grid
-    ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
-    xx, yy = tf.meshgrid(ax, ax)
-    # calculate weight and reshape to correct shape
-    w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.*sigma**2))
-    w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
-
-    # dublicate kernel num_x times
-    w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value,-1), [1,1,num_x])
-    # add expand one dimension to match depthwise_conv2d_native filter requirement
-    w_gauss_value = tf.expand_dims(w_gauss_value,-1)
-    w_gauss = tf.Variable(w_gauss_value, name='w_gauss',trainable=False)
-
-    
-    o = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
-
-    #o = tf.expand_dims(x, -1)
-    #o = tf.nn.conv3d(o, w_gauss, strides=[1,1,1,1,1], padding='SAME')
-    #o = tf.squeeze(o, -1)
+    o_avg = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
 
     with tf.variable_scope(name) as scope:
+        # perform gaussian filtering
+        sigma_init = 1.0
+        init = tf.constant_initializer(sigma_init)
+        sigma = tf.get_variable('gauss_sigma', shape=[1], initializer=init)
+
+        ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
+        xx, yy = tf.meshgrid(ax, ax)
+        w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+        w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
+        w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
+        w_gauss_value = tf.expand_dims(w_gauss_value,-1)
+        w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
+        o_gauss = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+
+        # perform SSC filtering
+        fix_w = tf.get_variable('fix_w', shape=[fix_w_size, fix_w_size, 1, 1, 1], initializer=tf.zeros_initializer)
+        mask = np.zeros([fix_w_size, fix_w_size, 1, 1, 1], dtype=np.float32)
+        mask[dilation_factor - 1, dilation_factor - 1, 0, 0, 0] = 1
+        fix_w = tf.add(fix_w, tf.constant(mask, dtype=tf.float32))
+        o_ssc = tf.expand_dims(x, -1)
+        o_ssc = tf.nn.conv3d(o_ssc, fix_w, strides=[1,1,1,1,1], padding='SAME')
+        o_ssc = tf.squeeze(o_ssc, -1)
+
+#        o = c_vector(o_avg, o_gauss, o_ssc)
+
+        o = c_[0]*o_avg + c_[1]*o_gauss + c_[2]*o_ssc
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
         o = tf.nn.atrous_conv2d(o, w, dilation_factor, padding='SAME')
         if biased:
             b = tf.get_variable('biases', shape=[num_o])
             o = tf.nn.bias_add(o, b)
         return o
+
+
+
+# Use a separate sigma for each dilated convolution 
+def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+    """
+    Dilated conv2d with antecedent gaussian filter and without BN or relu.
+    """
+    num_x = x.shape[3].value
+    filter_size = dilation_factor-1
+
+    with tf.variable_scope(name) as scope:
+        sigma_init = 1.0
+        init = tf.constant_initializer(sigma_init)
+        sigma = tf.get_variable('gauss_sigma', shape=[1], initializer=init)
+
+        ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
+        xx, yy = tf.meshgrid(ax, ax)
+
+        w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+        w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
+
+        w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
+
+        w_gauss_value = tf.expand_dims(w_gauss_value,-1)
+        w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
+
+        o = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+        w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
+        o = tf.nn.atrous_conv2d(o, w, dilation_factor, padding='SAME')
+        if biased:
+            b = tf.get_variable('biases', shape=[num_o])
+            o = tf.nn.bias_add(o, b)
+
+        return o
+
+
+
+# Use a single sigma for all dilated convolutions
+#def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+#    """
+#    Dilated conv2d with antecedent gaussian filter and without BN or relu.
+#    """
+#    num_x = x.shape[3].value
+#    filter_size = dilation_factor-1
+#
+#    gauss_sigma = tf.make_template('sigma', _gauss_sigma)
+#    sigma = gauss_sigma()
+#
+#    ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
+#    xx, yy = tf.meshgrid(ax, ax)
+#
+#    w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+#    w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
+#
+#    w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
+#    w_gauss_value = tf.expand_dims(w_gauss_value,-1)
+#    w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
+#    o_gauss = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+#
+#
+#    with tf.variable_scope(name) as scope:
+#        w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
+#        o = tf.nn.atrous_conv2d(o_gauss, w, dilation_factor, padding='SAME')
+#        if biased:
+#            b = tf.get_variable('biases', shape=[num_o])
+#            o = tf.nn.bias_add(o, b)
+#
+#        return o
+
 
 def _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
     """
