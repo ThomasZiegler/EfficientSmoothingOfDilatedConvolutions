@@ -14,21 +14,21 @@ I appreciate ideas for a more efficient implementation of the proposed two smoot
 
 
 def _dilated_conv2d(dilated_type, x, kernel_size, num_o, dilation_factor, name,
-                    filter_size=1, biased=False):
+                    top_scope, biased=False):
     if dilated_type == 'regular':
-        return _regular_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _regular_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'decompose':
-        return _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'smooth_GI':
-        return _smoothed_dilated_conv2d_GI(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _smoothed_dilated_conv2d_GI(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'smooth_SSC':
-        return _smoothed_dilated_conv2d_SSC(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _smoothed_dilated_conv2d_SSC(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'average_filter':
-        return _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'gaussian_filter':
-        return _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
     elif dilated_type == 'combinational_layer':
-        return _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size, biased)
+        return _combinational_layer(x, kernel_size, num_o, dilation_factor, name, top_scope, biased)
 
     else:
         print('dilated_type ERROR!')
@@ -36,7 +36,7 @@ def _dilated_conv2d(dilated_type, x, kernel_size, num_o, dilation_factor, name,
         sys.exit(-1)
 
 def _regular_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name,
-                            filter_size=1, biased=False):
+                            top_scope=1, biased=False):
     """
     Dilated conv2d without BN or relu.
     """
@@ -49,7 +49,7 @@ def _regular_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name,
             o = tf.nn.bias_add(o, b)
         return o
 
-def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _averaged_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
     """
     Dilated conv2d with antecedent average filter and without BN or relu.
     """
@@ -77,7 +77,7 @@ def _c_vector(o_avg, o_gauss, o_ssc):
     c_init = tf.constant_initializer(c_values)
     c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init)
     c_sum = tf.reduce_sum(c_)
-    c_ = c_ / c_sum
+    c_.assign( c_ / c_sum)
     o = c_[0]*o_avg + c_[1]*o_gauss + c_[2]*o_ssc
 
     return o 
@@ -92,7 +92,7 @@ def _gauss_sigma():
 
 
 # use only one sigma for all dilated convolutions
-#def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+#def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
 #    """
 #    Dilated conv2d with antecedent average filter and without BN or relu.
 #    """
@@ -142,23 +142,56 @@ def _gauss_sigma():
 #            o = tf.nn.bias_add(o, b)
 #    return o
 
+#def _get_c_vector(name):
+#    with tf.variable_scope(name) as scope:
+#        try:
+##            c_ = tf.get_variable('c_vector', shape=[], initializer=tf.constant_initializer([0.33, 0.33, 0.33]))
+#            c_values = [1.0, 1.0, 1.0]
+#            c_init = tf.constant_initializer(c_values)
+##            c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init, constraint=lambda x: x / tf.reduce_sum(x))
+##            c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init )
+#
+#        except ValueError:
+###            scope.reuse_variables()
+#            c_ = tf.get_variable('c_vector')
+#
+#        return tf.nn.softmax(c_)
+
 def _get_c_vector(name):
     with tf.variable_scope(name) as scope:
         try:
-#            c_ = tf.get_variable('c_vector', shape=[], initializer=tf.constant_initializer([0.33, 0.33, 0.33]))
-            c_values = [0.33, 0.33, 0.33]
-            c_init = tf.constant_initializer(c_values)
-            c_ = tf.get_variable('c_vector', shape=[3], initializer=c_init, constraint=lambda x: x / tf.reduce_sum(x))
+            c_value = [1.0]
+            c_init = tf.constant_initializer(c_value)
+#            c_1 = tf.get_variable('c_1', shape=[1], initializer=c_init )
+#            c_2 = tf.get_variable('c_2', shape=[1], initializer=c_init )
+#            c_3 = tf.get_variable('c_3', shape=[1], initializer=c_init )
+            
+            c_ = tf.get_variable('c_vector', shape=[3], initializer=tf.constant_initializer([0.33, 0.33, 0.33]))
 
         except ValueError:
             scope.reuse_variables()
+#            c_1 = tf.get_variable('c_1')
+#            c_2 = tf.get_variable('c_2')
+#            c_3 = tf.get_variable('c_3')
             c_ = tf.get_variable('c_vector')
+
+#        c_sum = tf.Variable
+#
+#        c_1.assign(c_1 / (c_1+c_2+c_3))
+#        c_2.assign(c_2 / (c_1+c_2+c_3))
+#        c_3.assign(c_3 / (c_1+c_2+c_3))
+
+
+#        return c_1, c_2, c_3 
+
+#        c_.assign(c_ / tf.reduce_sum(c_))
+        c_.assign(tf.nn.softmax(c_)) 
 
         return c_
 
 
 # Use a separate sigma value for each dilated convolution
-def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, top_scope, biased=False):
     """
     Dilated conv2d with antecedent average filter and without BN or relu.
     """
@@ -166,12 +199,22 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
     filter_size = dilation_factor - 1
     fix_w_size = dilation_factor * 2 - 1
 
-    c_vector = tf.make_template('const_vector', _c_vector)
-    c_ = _get_c_vector(name)
+#    c_vector = tf.make_template('const_vector', _c_vector)
+
+#    with tf.variable_scope(top_scope):
+#        c_ = tf.get_variable('c_vector', shape=[3], initializer=tf.constant_initializer([0.33, 0.33, 0.33]))
+
+#    c_1, c_2, c_3 = _get_c_vector(top_scope)
 #    c_sum = tf.reduce_sum(c_)
 #    c_.assign(c_ / c_sum)
-    c_div = tf.div(c_, (c_[0]+c_[1]+c_[2]))
-    c_.assign(c_div) 
+
+    c_ = _get_c_vector(top_scope)
+
+    
+#    c_ = tf.nn.softmax(c_)
+#    c_div = tf.div(c_, (c_[0]+c_[1]+c_[2]))
+#    c_.assign(c_div) 
+
 
 
 
@@ -181,20 +224,26 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
                                     shape=[filter_size,filter_size,num_x,1]), name='w_avg',trainable=False)
     o_avg = tf.nn.depthwise_conv2d_native(x, w_avg, [1,1,1,1], padding='SAME')
 
+
+    sigma = 1.0
+    ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
+    xx, yy = tf.meshgrid(ax, ax)
+    w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+    w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
+    w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
+    w_gauss_value = tf.expand_dims(w_gauss_value,-1)
+    w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
+    o_gauss = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+
+    t_ = [1.0, 0.0, 0.0]
+#    t_ = [0.5, 0.5]
+
+    o_t = t_[0]*o_avg + t_[1]*o_gauss
     with tf.variable_scope(name) as scope:
         # perform gaussian filtering
-        sigma_init = 1.0
-        init = tf.constant_initializer(sigma_init)
-        sigma = tf.get_variable('gauss_sigma', shape=[1], initializer=init)
-
-        ax = tf.range(-filter_size//2+1, filter_size//2+1, dtype=tf.float32)
-        xx, yy = tf.meshgrid(ax, ax)
-        w_gauss_value = tf.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
-        w_gauss_value = w_gauss_value / tf.reduce_sum(w_gauss_value)
-        w_gauss_value = tf.tile(tf.expand_dims(w_gauss_value, -1), [1,1, num_x])
-        w_gauss_value = tf.expand_dims(w_gauss_value,-1)
-        w_gauss = tf.Variable(w_gauss_value, name='w_gauss')
-        o_gauss = tf.nn.depthwise_conv2d_native(x, w_gauss, [1,1,1,1], padding='SAME')
+#        sigma_init = 1.0
+#        init = tf.constant_initializer(sigma_init)
+#        sigma = tf.get_variable('gauss_sigma', shape=[1], initializer=init)
 
         # perform SSC filtering
         fix_w = tf.get_variable('fix_w', shape=[fix_w_size, fix_w_size, 1, 1, 1], initializer=tf.zeros_initializer)
@@ -207,9 +256,21 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
 
 #        o = c_vector(o_avg, o_gauss, o_ssc)
 
-        o = c_[0]*o_avg + c_[1]*o_gauss + c_[2]*o_ssc
+#        o = c_[0]*o_avg + c_[1]*o_gauss + c_[2]*o_ssc
+
+
+
+        o = t_[0]*o_avg + t_[1]*o_gauss + t_[2]*o_ssc
+        o = o_avg
+
+#        c_soft = tf.get_variable('c_soft_max', shape=[3], initializer=tf.zeros_initializer)
+#        c_soft.assign(tf.nn.softmax(c_))
+#        o = c_soft[0]*o_avg + c_soft[1]*o_gauss + c_soft[2]*o_ssc
+
+#        o = c_1*o_avg + c_2*o_gauss + c_3*o_ssc
         w = tf.get_variable('weights', shape=[kernel_size, kernel_size, num_x, num_o])
         o = tf.nn.atrous_conv2d(o, w, dilation_factor, padding='SAME')
+#        o = tf.nn.atrous_conv2d(o_t, w, dilation_factor, padding='SAME')
         if biased:
             b = tf.get_variable('biases', shape=[num_o])
             o = tf.nn.bias_add(o, b)
@@ -218,7 +279,7 @@ def _combinational_layer(x, kernel_size, num_o, dilation_factor, name, filter_si
 
 
 # Use a separate sigma for each dilated convolution 
-def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
     """
     Dilated conv2d with antecedent gaussian filter and without BN or relu.
     """
@@ -290,7 +351,7 @@ def _get_sigma(name):
 
 
 ## Use a single sigma for all dilated convolutions
-#def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+#def _gaussian_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
 #    """
 #    Dilated conv2d with antecedent gaussian filter and without BN or relu.
 #    """
@@ -341,7 +402,7 @@ def _get_sigma(name):
 #
 #        return o
 
-def _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
     """
     Decomposed dilated conv2d without BN or relu.
     """
@@ -366,7 +427,7 @@ def _decomposed_dilated_conv2d(x, kernel_size, num_o, dilation_factor, name, fil
     o = tf.batch_to_space(o, crops=pad, block_size=dilation_factor)
     return o
 
-def _smoothed_dilated_conv2d_GI(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _smoothed_dilated_conv2d_GI(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
     """
     Smoothed dilated conv2d via the Group Interaction (GI) layer without BN or relu.
     """
@@ -399,7 +460,7 @@ def _smoothed_dilated_conv2d_GI(x, kernel_size, num_o, dilation_factor, name, fi
     o = tf.batch_to_space(o, crops=pad, block_size=dilation_factor)
     return o
 
-def _smoothed_dilated_conv2d_SSC(x, kernel_size, num_o, dilation_factor, name, filter_size=1, biased=False):
+def _smoothed_dilated_conv2d_SSC(x, kernel_size, num_o, dilation_factor, name, top_scope=1, biased=False):
     """
     Smoothed dilated conv2d via the Separable and Shared Convolution (SSC) without BN or relu.
     """
