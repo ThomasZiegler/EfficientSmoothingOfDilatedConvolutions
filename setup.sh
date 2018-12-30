@@ -19,7 +19,7 @@ else
 	export DATALIST="$PROJECT_DIR/dataset/train.txt"
 	export VALDATALIST="$PROJECT_DIR/dataset/val.txt"
 	export NR_VAL=1449
-	export BATCH_SIZE=10
+	export BATCH_SIZE=9
 	export IMG_SIZE=321
 	export NUM_CLASSES=21
 fi

@@ -30,6 +30,7 @@ class Model(object):
     def __init__(self, sess, conf):
         self.sess = sess
         self.conf = conf
+        self.conf.top_scope = tf.get_variable_scope()
 
     # train
     def train(self):
@@ -37,6 +38,7 @@ class Model(object):
 
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
+
 
         if self.conf.start_step == 0:
             # Load the pre-trained model if provided
@@ -53,7 +55,11 @@ class Model(object):
         threads = tf.train.start_queue_runners(coord=self.coord, sess=self.sess)
 
         # Train!
+        c_gradients =  [0, 0, 0]
         c_vector = np.array([0, 0, 0])
+        c_1 = np.array([0])
+        c_2 = np.array([0])
+        c_3 = np.array([0])
         for step in range(self.conf.start_step, self.conf.start_step+self.conf.num_steps+1):
             start_time = time.time()
             feed_dict = { self.curr_step : step }
@@ -68,8 +74,8 @@ class Model(object):
 #                    self.total_summary,
 #                    self.train_op],
 #                    feed_dict=feed_dict)
-                loss_value, _, _ = self.sess.run(
-                    [self.reduced_loss,
+#                loss_value, c_gradients, _, _ = self.sess.run([self.reduced_loss, self.c_gradients,
+                loss_value, _, _ = self.sess.run([self.reduced_loss,
                     self.train_op,
                     self.mIou_update_op],
                     feed_dict=feed_dict)
@@ -80,6 +86,15 @@ class Model(object):
                 summary.value.add(tag='loss', simple_value=loss_value)
 
                 try:
+#                    var_c = [v for v in tf.global_variables() if "c_1" in v.name][0]
+#                    c_1 = var_c.eval(session=self.sess)
+#                    var_c = [v for v in tf.global_variables() if "c_2" in v.name][0]
+#                    c_2 = var_c.eval(session=self.sess)
+#                    var_c = [v for v in tf.global_variables() if "c_3" in v.name][0]
+#                    c_3 = var_c.eval(session=self.sess)
+
+
+
                     var_c = [v for v in tf.global_variables() if "c_vector" in v.name][0]
                     c_vector = var_c.eval(session=self.sess)
                     summary = tf.Summary()
@@ -94,12 +109,35 @@ class Model(object):
                 self.summary_writer_train.add_summary(summary, step)
 #                self.save(self.saver, step)
             else:
-                loss_value, _, _ = self.sess.run([self.reduced_loss,
+#                loss_value, c_gradients,  _, _ = self.sess.run([self.reduced_loss, self.c_gradients,
+                loss_value,  _, _ = self.sess.run([self.reduced_loss,
                                                      self.train_op, self.mIou_update_op], feed_dict=feed_dict)
                 mIoU = self.mIoU.eval(session=self.sess)
+                try:
+#                    var_c = [v for v in tf.global_variables() if "c_1" in v.name][0]
+#                    c_1 = var_c.eval(session=self.sess)
+#                    var_c = [v for v in tf.global_variables() if "c_2" in v.name][0]
+#                    c_2 = var_c.eval(session=self.sess)
+#                    var_c = [v for v in tf.global_variables() if "c_3" in v.name][0]
+#                    c_3 = var_c.eval(session=self.sess)
+
+
+
+                    var_c = [v for v in tf.global_variables() if "c_vector" in v.name][0]
+                    c_vector = var_c.eval(session=self.sess)
+                    summary = tf.Summary()
+                    summary.value.add(tag='C_1', simple_value=var_c[0])
+                    summary.value.add(tag='C_2', simple_value=var_c[1])
+                    summary.value.add(tag='C_3', simple_value=var_c[2])
+                    self.summary_writer_train.add_summary(summary,
+                                                         (self.conf.start_step+self.conf.num_steps))
+                except:
+                    pass
+
             duration = time.time() - start_time
 #           print('step {:d} \t loss = {:.3f}, ({:.3f} sec/step)'.format(step, loss_value, duration))
-            write_log('{:d}, {:.3f}, {:.3f}, [{:.3f}, {:.3f}, {:.3f}]'.format(step, loss_value, mIoU, c_vector[0], c_vector[1], c_vector[2]), self.conf.logfile)
+            write_log('{:d}, {:.3f}, {:.3f}, {:}, [{:.3f}, {:.3f}, {:.3f}]'.format(step, loss_value, mIoU, c_gradients, c_vector[0], c_vector[1], c_vector[2] ), self.conf.logfile)
+#            write_log('{:d}, {:.3f}, {:.3f}, [{:}, {:}, {:}]'.format(step, loss_value, mIoU, str(c_1), str(c_2), str(c_3)), self.conf.logfile)
 
         # finish
         self.save(self.saver, step)
@@ -227,12 +265,12 @@ class Model(object):
             sys.exit(-1)
         elif self.conf.encoder_name == 'deeplab':
             net = Deeplab_v2(self.image_batch, self.conf.num_classes, True,
-                             self.conf.dilated_type, self.conf.filter_size)
+                             self.conf.dilated_type, self.conf.top_scope)
             # Variables that load from pre-trained model.
             restore_var = [v for v in tf.global_variables() if 'fc' not in v.name
                            and 'fix_w' not in v.name and 'w_avg' not in v.name
-                           and 'w_gauss' not in v.name and 'c_vector' not in v.name
-                           and 'gauss_sigma' not in v.name]
+                           and 'w_gauss' not in v.name and 'c_' not in v.name
+                           and 'gauss_sigma' not in v.name ]
             # Trainable Variables
             all_trainable = tf.trainable_variables()
             # Fine-tune part
@@ -243,7 +281,7 @@ class Model(object):
                                  'w_avg' not in v.name and 'w_gauss' not in v.name
                                  and 'gauss_sigma' not in v.name]
         else:
-            net = ResNet_segmentation(self.image_batch, self.conf.num_classes, True, self.conf.encoder_name, self.conf.dilated_type, self.conf.filter_size)
+            net = ResNet_segmentation(self.image_batch, self.conf.num_classes, True, self.conf.encoder_name, self.conf.dilated_type, self.conf.top_scope)
             # Variables that load from pre-trained model.
             restore_var = [v for v in tf.global_variables() if 'resnet_v1' in v.name and 'fix_w' not in v.name]
             # Trainable Variables
@@ -258,7 +296,7 @@ class Model(object):
 
 #        decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
         decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name] # lr * 10.0
-        assert(len(decoder_pre_trainable) > 0 )
+#        assert(len(decoder_pre_trainable) > 0 )
         # Check
         assert(len(all_trainable) == len(decoder_trainable) + len(encoder_trainable))
         assert(len(decoder_trainable) == len(decoder_w_trainable) + len(decoder_b_trainable))
@@ -296,7 +334,7 @@ class Model(object):
         opt_encoder = tf.train.MomentumOptimizer(learning_rate, self.conf.momentum)
         opt_decoder_w = tf.train.MomentumOptimizer(learning_rate * 10.0, self.conf.momentum)
         opt_decoder_b = tf.train.MomentumOptimizer(learning_rate * 20.0, self.conf.momentum)
-        opt_decoder_pre = tf.train.MomentumOptimizer(learning_rate * 10.0, self.conf.momentum)
+        opt_decoder_pre = tf.train.MomentumOptimizer(learning_rate * 2, self.conf.momentum)
 
         # To make sure each layer gets updated by different lr's, we do not use 'minimize' here.
         # Instead, we separate the steps compute_grads+update_params.
@@ -306,19 +344,29 @@ class Model(object):
         grads_decoder_w = grads[len(encoder_trainable) : (len(encoder_trainable) + len(decoder_w_trainable))]
         grads_decoder_b = grads[(len(encoder_trainable) + len(decoder_w_trainable)) : (len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable))]
         grads_decoder_pre = grads[(len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable)):]
+
+
+#
+#        grads_decoder_pre = [tf.clip_by_value(grad, -5., 5.) for grad in grads_decoder_pre]
+#
+        self.c_gradients = grads_decoder_pre
         
-        assert(len(grads_decoder_pre) > 0 )
 
         # Update params
         train_op_conv = opt_encoder.apply_gradients(zip(grads_encoder, encoder_trainable))
         train_op_fc_w = opt_decoder_w.apply_gradients(zip(grads_decoder_w, decoder_w_trainable))
         train_op_fc_b = opt_decoder_b.apply_gradients(zip(grads_decoder_b, decoder_b_trainable))
-        train_op_fc_pre = opt_decoder_pre.apply_gradients(zip(grads_decoder_pre, decoder_pre_trainable))
-        
+
+
+#
+#        train_op_fc_pre = opt_decoder_pre.apply_gradients(zip(grads_decoder_pre, decoder_pre_trainable))
+#        
         # Finally, get the train_op!
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # for collecting moving_mean and moving_variance
         with tf.control_dependencies(update_ops):
-            self.train_op = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b, train_op_fc_pre)
+            
+##            self.train_op = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b, train_op_fc_pre)
+            self.train_op = tf.group(train_op_conv, train_op_fc_w, train_op_fc_b)
 
         # Saver for storing checkpoints of the model
         self.saver = tf.train.Saver(var_list=tf.global_variables(), max_to_keep=0)
@@ -395,9 +443,9 @@ class Model(object):
             print("Please input: res101, res50, or deeplab")
             sys.exit(-1)
         elif self.conf.encoder_name == 'deeplab':
-            net = Deeplab_v2(self.image_batch, self.conf.num_classes, False, self.conf.dilated_type, self.conf.filter_size)
+            net = Deeplab_v2(self.image_batch, self.conf.num_classes, False, self.conf.dilated_type, self.conf.top_scope)
         else:
-            net = ResNet_segmentation(self.image_batch, self.conf.num_classes, False, self.conf.encoder_name, self.conf.dilated_type, self.conf.filter_size)
+            net = ResNet_segmentation(self.image_batch, self.conf.num_classes, False, self.conf.encoder_name, self.conf.dilated_type, self.conf.top_scope)
 
         # predictions
         raw_output = net.outputs
@@ -455,9 +503,9 @@ class Model(object):
             print("Please input: res101, res50, or deeplab")
             sys.exit(-1)
         elif self.conf.encoder_name == 'deeplab':
-            net = Deeplab_v2(image_batch, self.conf.num_classes, False, self.conf.dilated_type, self.conf.filter_size)
+            net = Deeplab_v2(image_batch, self.conf.num_classes, False, self.conf.dilated_type, self.conf.top_scope)
         else:
-            net = ResNet_segmentation(image_batch, self.conf.num_classes, False, self.conf.encoder_name, self.conf.dilated_type, self.conf.filter_size)
+            net = ResNet_segmentation(image_batch, self.conf.num_classes, False, self.conf.encoder_name, self.conf.dilated_type, self.conf.top_scope)
 
         # Predictions.
         raw_output = net.outputs
