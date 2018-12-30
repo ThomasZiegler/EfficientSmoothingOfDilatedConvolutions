@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import argparse
 import os
+import sys
 import tensorflow as tf
 import json
 from model import Model
@@ -30,7 +31,7 @@ def configure():
     flags.DEFINE_string('encoder_name', 'deeplab', 'name of pre-trained model: res101, res50 or deeplab')
     flags.DEFINE_string('pretrain_file', '../reference_model/deeplab_resnet_init.ckpt', 'pre-trained model filename corresponding to encoder_name')
     flags.DEFINE_string('checkpoint_file', '../reference_model/deeplab_resnet_init.ckpt', 'checkpoint model filename corresponding to encoder_name')
-    flags.DEFINE_string('dilated_type', 'combinational_layer', 'type of dilated conv: regular, decompose, smooth_GI, smooth_SSC or average_filter')
+    flags.DEFINE_string('dilated_type', 'gaussian_filter', 'type of dilated conv: regular, decompose, smooth_GI, smooth_SSC or average_filter')
     flags.DEFINE_integer('filter_size', 5, 'size of used filter e.g. average_filter')
     flags.DEFINE_string('data_list', os.environ['DATALIST'], 'training data list filename')
 
@@ -62,17 +63,20 @@ def configure():
     flags.DEFINE_string('logdir', 'log', 'training log directory')
 
     flags.FLAGS._parse_flags()
+#    flags.FLAGS(sys.argv)
     return flags.FLAGS
 
 def del_all_flags(FLAGS):
     if not FLAGS.__dict__['__parsed']:
         FLAGS._parse_flags()
+#        FLAGS(sys.argv)
     for key in FLAGS.__flags.keys():
         FLAGS.__delattr__(key)
 
 def write_all_flags(FLAGS):
     if not FLAGS.__dict__['__parsed']:
         FLAGS._parse_flags()
+#        FLAGS(sys.argv)
     with open('parameters.json', 'w') as fp:
         json.dump(FLAGS.__flags, fp, indent=4)
 

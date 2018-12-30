@@ -53,7 +53,7 @@ class Model(object):
         threads = tf.train.start_queue_runners(coord=self.coord, sess=self.sess)
 
         # Train!
-        c_vector = [0, 0, 0]
+        c_vector = np.array([0, 0, 0])
         for step in range(self.conf.start_step, self.conf.start_step+self.conf.num_steps+1):
             start_time = time.time()
             feed_dict = { self.curr_step : step }
@@ -238,8 +238,10 @@ class Model(object):
             # Fine-tune part
             encoder_trainable = [v for v in all_trainable if 'fc' not in v.name] # lr * 1.0
             # Decoder part
+#            decoder_trainable = [v for v in all_trainable if 'fc' in v.name and
             decoder_trainable = [v for v in all_trainable if 'fc' in v.name and
-                                 'w_avg' not in v.name and 'w_gauss' not in v.name]
+                                 'w_avg' not in v.name and 'w_gauss' not in v.name
+                                 and 'gauss_sigma' not in v.name]
         else:
             net = ResNet_segmentation(self.image_batch, self.conf.num_classes, True, self.conf.encoder_name, self.conf.dilated_type, self.conf.filter_size)
             # Variables that load from pre-trained model.
@@ -251,10 +253,12 @@ class Model(object):
             # Decoder part
             decoder_trainable = [v for v in all_trainable if 'decoder' in v.name]
         
-        decoder_w_trainable = [v for v in decoder_trainable if 'weights' in v.name or 'gamma' in v.name or 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
+        decoder_w_trainable = [v for v in decoder_trainable if 'weights' in v.name or 'gamma' in v.name] # lr * 10.0
         decoder_b_trainable = [v for v in decoder_trainable if 'biases' in v.name or 'beta' in v.name] # lr * 20.0
 
-        decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
+#        decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name or 'gauss_sigma' in v.name] # lr * 10.0
+        decoder_pre_trainable = [v for v in all_trainable if 'c_vector' in v.name] # lr * 10.0
+        assert(len(decoder_pre_trainable) > 0 )
         # Check
         assert(len(all_trainable) == len(decoder_trainable) + len(encoder_trainable))
         assert(len(decoder_trainable) == len(decoder_w_trainable) + len(decoder_b_trainable))
@@ -292,7 +296,7 @@ class Model(object):
         opt_encoder = tf.train.MomentumOptimizer(learning_rate, self.conf.momentum)
         opt_decoder_w = tf.train.MomentumOptimizer(learning_rate * 10.0, self.conf.momentum)
         opt_decoder_b = tf.train.MomentumOptimizer(learning_rate * 20.0, self.conf.momentum)
-        opt_decoder_pre = tf.train.MomentumOptimizer(learning_rate * 15.0, self.conf.momentum)
+        opt_decoder_pre = tf.train.MomentumOptimizer(learning_rate * 10.0, self.conf.momentum)
 
         # To make sure each layer gets updated by different lr's, we do not use 'minimize' here.
         # Instead, we separate the steps compute_grads+update_params.
@@ -302,6 +306,8 @@ class Model(object):
         grads_decoder_w = grads[len(encoder_trainable) : (len(encoder_trainable) + len(decoder_w_trainable))]
         grads_decoder_b = grads[(len(encoder_trainable) + len(decoder_w_trainable)) : (len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable))]
         grads_decoder_pre = grads[(len(encoder_trainable) + len(decoder_w_trainable) + len(decoder_b_trainable)):]
+        
+        assert(len(grads_decoder_pre) > 0 )
 
         # Update params
         train_op_conv = opt_encoder.apply_gradients(zip(grads_encoder, encoder_trainable))
